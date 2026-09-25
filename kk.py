@@ -1,7 +1,6 @@
-
 #!/usr/bin/env python3
-# main.py — Dual bot: Main + Showcase (Render-ready)
-import os, sys, json, time, random, sqlite3, threading, uuid, csv, io, logging, html, base64
+# main.py — Dual bot: Main + Showcase (single file for Render) — FINAL
+import os, sys, json, time, random, sqlite3, threading, uuid, csv, io, logging, html
 from datetime import datetime, timedelta
 from collections import defaultdict, deque
 from queue import PriorityQueue
@@ -17,8 +16,8 @@ CHANNEL_TG = "thaish12"
 CHANNEL_YT = "https://youtube.com/@tahish159?si=5ehTRVzB7WOnOj5s"
 BOT_USERNAME = "Rame124673_bot"
 
-# 🛒 رابط القناة (افتح القناة باسم المستخدم من تلجرام)
-SHOWCASE_URL = "https://t.me/اسم_قناتك"
+SHOWCASE_URL      = "https://t.me/GiftCodeWins51"
+SHOWCASE_USERNAME = "Shop_giftcode51031_bot"
 
 INITIAL_POINTS = 50
 REFERRAL_POINTS = 20
@@ -38,19 +37,12 @@ GC_BASE_URL   = "https://giftcode.betelgeuse.app"
 GC_LEADERS    = f"{GC_BASE_URL}/api/leaders"
 GC_STORE      = f"{GC_BASE_URL}/api/store"
 GC_REFER      = f"{GC_BASE_URL}/api/referrer"
-GC_CONFIGS    = f"{GC_BASE_URL}/api/configs"
 GC_REF_CODE   = "4094894"
 GC_TOKEN      = os.getenv("GC_TOKEN", "")
 GC_FEED_INTERVAL   = 60
 GC_AUTO_INTERVAL   = 1800
 SHOWCASE_POLL_INTERVAL = 60
 STORE_CACHE_TTL = 3600
-
-# GitHub sync (اختياري — اتركه فارغاً لتعطيله)
-GITHUB_REPO   = os.getenv("GH_REPO", "")
-GITHUB_TOKEN  = os.getenv("GH_TOKEN", "")
-GH_API        = "https://api.github.com"
-DATA_SYNC_INTERVAL = 900   # 15 دقيقة
 
 PORT = int(os.getenv("PORT", "8080"))
 
@@ -290,7 +282,8 @@ def reimport_sessions(verbose=False):
                 pts = json.load(f).get("points", INITIAL_POINTS)
         except Exception:
             continue
-        existing = db_exec("SELECT user_id FROM users WHERE user_id=?", (uid,), "one")
+        existing = db_exec("SELECT user_id FROM users WHERE user_id=?",
+                           (uid,), "one")
         if not existing:
             ensure_user(uid)
             set_user(uid, points=pts)
@@ -481,45 +474,50 @@ class GiftCodeClient:
         return requests.request(method, url, headers=headers,
                                 proxies=proxies, timeout=20, **kw)
 
+    def is_down(self):
+        try:
+            r = requests.get(GC_LEADERS, timeout=5)
+            return r.status_code >= 500
+        except Exception:
+            return True
+
     def fetch_leaders(self):
         r = requests.get(GC_LEADERS, headers=GC_DEFAULT_HEADERS, timeout=15)
         r.raise_for_status()
         d = r.json()
 
-        gold = [{"name": p.get("name") or "?",
-                 "value": p.get("gold", 0) or 0,
-                 "photo": p.get("photo_url") or ""}
-                for p in d.get("top_gold", []) or []]
+        gold = [{
+            "name": p.get("name") or "?",
+            "value": p.get("gold", 0) or 0,
+            "photo": p.get("photo_url") or "",
+        } for p in d.get("top_gold", []) or []]
 
-        diamond = [{"name": p.get("name") or "?",
-                    "value": p.get("diamond", 0) or 0,
-                    "photo": p.get("photo_url") or ""}
-                   for p in d.get("top_diamond", []) or []]
+        diamond = [{
+            "name": p.get("name") or "?",
+            "value": p.get("diamond", 0) or 0,
+            "photo": p.get("photo_url") or "",
+        } for p in d.get("top_diamond", []) or []]
 
-        tasks = [{"name": t.get("name") or "?",
-                  "company": t.get("company") or "?",
-                  "offer": t.get("offer_name") or "?",
-                  "gold": t.get("gold_earned", 0) or 0,
-                  "completed": t.get("completed_at") or "",
-                  "photo": t.get("photo_url") or ""}
-                 for t in d.get("recent_tasks", []) or []]
+        tasks = [{
+            "name": t.get("name") or "?",
+            "company": t.get("company") or "?",
+            "offer": t.get("offer_name") or "?",
+            "gold": t.get("gold_earned", 0) or 0,
+            "completed": t.get("completed_at") or "",
+            "photo": t.get("photo_url") or "",
+        } for t in d.get("recent_tasks", []) or []]
 
-        purchases = [{"user_id": str(p.get("user_id") or ""),
-                      "name": p.get("user_name") or "?",
-                      "product": (p.get("product_title_en") or
-                                  p.get("product_title_tr") or "?"),
-                      "currency": p.get("currency") or "",
-                      "time": p.get("purchase_time") or "",
-                      "photo": p.get("photo_url") or ""}
-                     for p in d.get("recent_purchases", []) or []]
+        purchases = [{
+            "user_id": str(p.get("user_id") or ""),
+            "name": p.get("user_name") or "?",
+            "product": (p.get("product_title_en") or p.get("product_title_tr") or "?"),
+            "currency": p.get("currency") or "",
+            "time": p.get("purchase_time") or "",
+            "photo": p.get("photo_url") or "",
+        } for p in d.get("recent_purchases", []) or []]
 
         return {"gold": gold, "diamond": diamond,
                 "tasks": tasks, "purchases": purchases}
-
-    def fetch_store(self):
-        r = requests.get(GC_STORE, headers=GC_DEFAULT_HEADERS, timeout=15)
-        r.raise_for_status()
-        return r.json()
 
     def collect_ids(self, leaders=None):
         if leaders is None:
@@ -633,6 +631,12 @@ class GiftCodeClient:
         except Exception:
             return str(v)
 
+    @staticmethod
+    def fmt_date(iso):
+        if not iso:
+            return ""
+        return str(iso).replace("T", " ")[:16]
+
 
 _gc_client = None
 
@@ -644,7 +648,7 @@ def get_gc():
     return _gc_client
 
 
-# ═══════════ Store cache ═══════════
+# ═══════════ Store cache (لعرض سعر الذهب في بوت العرض) ═══════════
 _store_cache = {"data": {}, "ts": 0}
 _store_lock = threading.Lock()
 
@@ -658,18 +662,14 @@ def _refresh_store_cache():
     except Exception as e:
         log.warning(f"store fetch: {e}")
         return
-
     mapping = {}
     for it in items:
         for key in (it.get("title_en"), it.get("title_tr")):
             if key:
                 mapping[key.lower().strip()] = {
                     "gold": it.get("gold_price", 0) or 0,
-                    "cost": it.get("cost", 0) or 0,
-                    "image": it.get("image_url") or "",
                     "on_stock": bool(it.get("on_stock")),
                 }
-
     with _store_lock:
         _store_cache["data"] = mapping
         _store_cache["ts"] = time.time()
@@ -697,7 +697,7 @@ def store_loop():
         _refresh_store_cache()
 
 
-# ═══════════ HTML renderers ═══════════
+# ═══════════ GiftCode HTML renderers ═══════════
 def _esc(s):
     return html.escape(str(s or ""))
 
@@ -783,7 +783,8 @@ def render_purchases(leaders, is_owner=False, top=20):
 def render_top_refs(limit=10):
     rows = db_exec("""SELECT u.user_id, u.first_name, u.username,
         (SELECT COUNT(*) FROM referrals r WHERE r.referrer=u.user_id) AS c
-        FROM users u ORDER BY c DESC LIMIT ?""", (limit,), "all")
+        FROM users u
+        ORDER BY c DESC LIMIT ?""", (limit,), "all")
     rows = [r for r in rows if r["c"] > 0]
     if not rows:
         return "🏅 <b>لا توجد إحالات بعد.</b>"
@@ -821,9 +822,12 @@ def giftcode_send(code, target, proxy=None):
             if d.get("success"):
                 return "success", d.get("referred_gold", 0)
             reason = d.get("reason", "")
-            if "Zaten" in reason: return "already", reason
-            if "Geçersiz" in reason: return "invalid", reason
-            if "Aynı IP" in reason: return "same_ip", reason
+            if "Zaten" in reason:
+                return "already", reason
+            if "Geçersiz" in reason:
+                return "invalid", reason
+            if "Aynı IP" in reason:
+                return "same_ip", reason
             return "failed", reason
         if r.status_code == 429:
             return "rate_limit", "429"
@@ -885,7 +889,8 @@ def is_banned(uid):
 
 
 def subscribed_tg(uid):
-    if is_owner(uid): return True
+    if is_owner(uid):
+        return True
     try:
         m = main_bot.get_chat_member(f"@{CHANNEL_TG}", uid)
         return m.status in ("member", "administrator", "creator")
@@ -894,7 +899,8 @@ def subscribed_tg(uid):
 
 
 def subscribed_yt(uid):
-    if is_owner(uid): return True
+    if is_owner(uid):
+        return True
     u = get_user(uid)
     if not u or not u["youtube_verified"]:
         return False
@@ -908,16 +914,20 @@ def subscribed_yt(uid):
 
 
 def check_subs(uid):
-    if is_owner(uid): return True, None
-    if not subscribed_tg(uid): return False, "telegram"
-    if not subscribed_yt(uid): return False, "youtube"
+    if is_owner(uid):
+        return True, None
+    if not subscribed_tg(uid):
+        return False, "telegram"
+    if not subscribed_yt(uid):
+        return False, "youtube"
     return True, None
 
 
 # ═══════════════════════ MAIN MENU ═══════════════════════
 def main_menu(uid, chat_id):
     u = get_user(uid)
-    if not u: return
+    if not u:
+        return
     name = u["first_name"] or "user"
     mode = u["mode"]
     kb = InlineKeyboardMarkup(row_width=2)
@@ -1006,7 +1016,8 @@ def process_sheep(uid, target, proxy):
 
 def attack_loop(uid, chat_id):
     u = get_user(uid)
-    if not u: return
+    if not u:
+        return
     mode = u["mode"]
     current = u["start_number"]
     attempts = successes = 0
@@ -1027,8 +1038,10 @@ def attack_loop(uid, chat_id):
     last_update = time.time()
 
     while attack_status.get(uid, {}).get("running"):
-        if _cancel.get(uid): break
-        if is_banned(uid): break
+        if _cancel.get(uid):
+            break
+        if is_banned(uid):
+            break
         if not is_owner(uid) and get_points(uid) <= 0:
             try:
                 main_bot.send_message(chat_id, f"⚠️ نفدت نقاطك\n{get_referral_link(uid)}")
@@ -1131,7 +1144,8 @@ for _ in range(WORKERS):
 # ═══════════════════════ Helpers ═══════════════════════
 def get_display(uid):
     u = get_user(uid)
-    if not u: return str(uid)
+    if not u:
+        return str(uid)
     n = u["first_name"] or "?"
     return f"{n} (@{u['username']})" if u["username"] else n
 
@@ -1142,7 +1156,8 @@ def get_referral_link(uid):
 
 def find_uid_by_input(s):
     s = s.strip()
-    if not s: return None
+    if not s:
+        return None
     if s.lstrip("@").isdigit():
         return int(s.lstrip("@"))
     uname = s.lstrip("@").lower()
@@ -1155,7 +1170,7 @@ def _purchase_key(p):
     return f"{p.get('user_id')}|{p.get('product')}|{p.get('time')}"
 
 
-# ═══════════════════════ Background: main owner feed ═══════════════════════
+# ═══════════════════════ Background: main bot owner feed ═══════════════════════
 def live_purchase_feed():
     time.sleep(15)
     while True:
@@ -1322,81 +1337,7 @@ def showcase_feed_now(chat_id):
         showcase_bot.send_message(chat_id, f"❌ {e}")
 
 
-# ═══════════════════════ GitHub sync (اختياري) ═══════════════════════
-def _gh_headers():
-    return {"Authorization": f"token {GITHUB_TOKEN}",
-            "Accept": "application/vnd.github.v3+json"}
-
-
-def gh_pull_user_data():
-    if not GITHUB_TOKEN or not GITHUB_REPO:
-        return 0
-    os.makedirs(OLD_DATA_DIR, exist_ok=True)
-    downloaded = 0
-    try:
-        url = f"{GH_API}/repos/{GITHUB_REPO}/contents/{OLD_DATA_DIR}"
-        r = requests.get(url, headers=_gh_headers(), timeout=15)
-        if r.status_code != 200:
-            return 0
-        for item in r.json():
-            if item["type"] != "file" or item["name"] == ".gitkeep":
-                continue
-            content = requests.get(item["download_url"],
-                                   headers=_gh_headers(), timeout=15).content
-            with open(os.path.join(OLD_DATA_DIR, item["name"]), "wb") as f:
-                f.write(content)
-            downloaded += 1
-        log.info(f"gh_pull: {downloaded} files")
-    except Exception as e:
-        log.error(f"gh_pull: {e}")
-    return downloaded
-
-
-def gh_push_user_data():
-    if not GITHUB_TOKEN or not GITHUB_REPO:
-        return False
-    if not os.path.isdir(OLD_DATA_DIR):
-        return False
-    pushed = 0
-    for fn in os.listdir(OLD_DATA_DIR):
-        if fn == ".gitkeep":
-            continue
-        path = os.path.join(OLD_DATA_DIR, fn)
-        if not os.path.isfile(path):
-            continue
-        try:
-            with open(path, "rb") as f:
-                content = base64.b64encode(f.read()).decode()
-            url = f"{GH_API}/repos/{GITHUB_REPO}/contents/{OLD_DATA_DIR}/{fn}"
-            r = requests.get(url, headers=_gh_headers(), timeout=15)
-            sha = r.json().get("sha") if r.status_code == 200 else None
-            body = {"message": f"update {fn}", "content": content}
-            if sha:
-                body["sha"] = sha
-            r = requests.put(url, headers=_gh_headers(), json=body, timeout=20)
-            if r.status_code in (200, 201):
-                pushed += 1
-        except Exception as e:
-            log.error(f"gh_push {fn}: {e}")
-    if pushed:
-        log.info(f"gh_push: {pushed} files")
-    return pushed > 0
-
-
-def gh_sync_loop():
-    if not GITHUB_TOKEN or not GITHUB_REPO:
-        log.info("gh_sync: disabled (no repo/token)")
-        return
-    time.sleep(120)
-    while True:
-        try:
-            gh_push_user_data()
-        except Exception as e:
-            log.error(f"gh_sync: {e}")
-        time.sleep(DATA_SYNC_INTERVAL)
-
-
-# ═══════════════════════ MAIN BOT handlers ═══════════════════════
+# ═══════════════════════ MAIN BOT — message handlers ═══════════════════════
 @main_bot.message_handler(commands=["start"])
 def main_cmd_start(m):
     uid = m.from_user.id
@@ -1485,17 +1426,19 @@ def main_qs_gc(m):
     gc_send(m.chat.id, "🎯 <b>لوحة GiftCode</b> — استخدم الأزرار في القائمة.")
 
 
-# ═══════════════════════ MAIN BOT owner commands ═══════════════════════
+# ═══════════════════════ MAIN BOT — owner commands ═══════════════════════
 @main_bot.message_handler(commands=["reimport"])
 def main_cmd_reimport(m):
-    if not is_owner(m.from_user.id): return
+    if not is_owner(m.from_user.id):
+        return
     u, p = reimport_sessions(verbose=True)
     main_bot.reply_to(m, f"✅ مستخدمون جدد: {u}\n💎 نقاط مستوردة: {p}")
 
 
 @main_bot.message_handler(commands=["sessions"])
 def main_cmd_sessions(m):
-    if not is_owner(m.from_user.id): return
+    if not is_owner(m.from_user.id):
+        return
     n = db_exec("SELECT COUNT(*) c FROM users", fetch="one")["c"]
     old = 0
     sp = os.path.join(OLD_DATA_DIR, "user_sessions.json")
@@ -1512,22 +1455,17 @@ def main_cmd_sessions(m):
 
 @main_bot.message_handler(commands=["sync"])
 def main_cmd_sync(m):
-    if not is_owner(m.from_user.id): return
+    if not is_owner(m.from_user.id):
+        return
     u, p = reimport_sessions(verbose=True)
     n = db_exec("SELECT COUNT(*) c FROM users", fetch="one")["c"]
-    main_bot.reply_to(m, f"🔄 زامن\n+{u} مستخدم\n+{p} نقاط\nالإجمالي: {n}")
-
-
-@main_bot.message_handler(commands=["gh_sync"])
-def main_cmd_gh_sync(m):
-    if not is_owner(m.from_user.id): return
-    ok = gh_push_user_data()
-    main_bot.reply_to(m, "✅ تمت المزامنة" if ok else "❌ فشل (تحقق من GH_TOKEN/GH_REPO)")
+    main_bot.reply_to(m, f"🔄 زامن\n+{u} مستخدم\n+{p} نقاط\nالإجمالي الآن: {n}")
 
 
 @main_bot.message_handler(commands=["broadcast"])
 def main_cmd_broadcast(m):
-    if not is_owner(m.from_user.id): return
+    if not is_owner(m.from_user.id):
+        return
     text = m.text.replace("/broadcast", "").strip()
     if not text:
         main_bot.reply_to(m, "الاستخدام: /broadcast النص")
@@ -1547,7 +1485,8 @@ def main_cmd_broadcast(m):
 
 @main_bot.message_handler(commands=["emergency_stop"])
 def main_cmd_estop(m):
-    if not is_owner(m.from_user.id): return
+    if not is_owner(m.from_user.id):
+        return
     n = 0
     for uid in list(attack_status.keys()):
         if attack_status[uid].get("running"):
@@ -1560,7 +1499,8 @@ def main_cmd_estop(m):
 
 @main_bot.message_handler(commands=["export"])
 def main_cmd_export(m):
-    if not is_owner(m.from_user.id): return
+    if not is_owner(m.from_user.id):
+        return
     buf = io.StringIO()
     w = csv.writer(buf)
     w.writerow(["uid", "name", "username", "points", "success",
@@ -1577,9 +1517,11 @@ def main_cmd_export(m):
 
 @main_bot.message_handler(commands=["ban"])
 def main_cmd_ban(m):
-    if not is_owner(m.from_user.id): return
+    if not is_owner(m.from_user.id):
+        return
     p = m.text.split()
-    if len(p) != 2: return
+    if len(p) != 2:
+        return
     uid = find_uid_by_input(p[1])
     if uid:
         set_user(uid, banned=1)
@@ -1589,9 +1531,11 @@ def main_cmd_ban(m):
 
 @main_bot.message_handler(commands=["unban"])
 def main_cmd_unban(m):
-    if not is_owner(m.from_user.id): return
+    if not is_owner(m.from_user.id):
+        return
     p = m.text.split()
-    if len(p) != 2: return
+    if len(p) != 2:
+        return
     uid = find_uid_by_input(p[1])
     if uid:
         set_user(uid, banned=0)
@@ -1601,7 +1545,8 @@ def main_cmd_unban(m):
 
 @main_bot.message_handler(commands=["live"])
 def main_cmd_live(m):
-    if not is_owner(m.from_user.id): return
+    if not is_owner(m.from_user.id):
+        return
     lines = [f"🔴 {get_display(int(uid))} #{attack_status[uid].get('number',0)}"
              for uid in attack_status if attack_status[uid].get("running")]
     main_bot.reply_to(m, "📡 Active:\n" + ("\n".join(lines) if lines else "لا يوجد"))
@@ -1609,11 +1554,12 @@ def main_cmd_live(m):
 
 @main_bot.message_handler(commands=["auto_harvest"])
 def main_cmd_auto_harvest(m):
-    if not is_owner(m.from_user.id): return
+    if not is_owner(m.from_user.id):
+        return
     arg = m.text.replace("/auto_harvest", "").strip().lower()
     if arg in ("on", "1", "تشغيل"):
         set_setting("gc_auto_enabled", "1")
-        main_bot.reply_to(m, "✅ المسح التلقائي مُفعّل")
+        main_bot.reply_to(m, "✅ المسح التلقائي مُفعّل (كل 30 دقيقة)")
     elif arg in ("off", "0", "إيقاف"):
         set_setting("gc_auto_enabled", "0")
         main_bot.reply_to(m, "⏹️ المسح التلقائي مُعطّل")
@@ -1625,7 +1571,8 @@ def main_cmd_auto_harvest(m):
 
 @main_bot.message_handler(commands=["feed"])
 def main_cmd_feed(m):
-    if not is_owner(m.from_user.id): return
+    if not is_owner(m.from_user.id):
+        return
     arg = m.text.replace("/feed", "").strip().lower()
     if arg in ("on", "1"):
         set_setting("gc_feed_enabled", "1")
@@ -1638,7 +1585,7 @@ def main_cmd_feed(m):
         main_bot.reply_to(m, f"الحالة: {'ON' if cur=='1' else 'OFF'}")
 
 
-# ═══════════════════════ MAIN BOT callbacks ═══════════════════════
+# ═══════════════════════ MAIN BOT — callbacks ═══════════════════════
 @main_bot.callback_query_handler(func=lambda c: True)
 def main_on_callback(c):
     uid = c.from_user.id
@@ -1795,13 +1742,15 @@ def main_on_callback(c):
             return
 
         if c.data == "owner_stats":
-            if not is_owner(uid): return
+            if not is_owner(uid):
+                return
             main_bot.answer_callback_query(c.id)
             do_owner_stats(chat_id)
             return
 
         if c.data == "owner_live":
-            if not is_owner(uid): return
+            if not is_owner(uid):
+                return
             main_bot.answer_callback_query(c.id)
             lines = [f"🔴 {get_display(int(x))} #{attack_status[x].get('number',0)}"
                      for x in attack_status if attack_status[x].get("running")]
@@ -1810,7 +1759,8 @@ def main_on_callback(c):
             return
 
         if c.data == "owner_estop":
-            if not is_owner(uid): return
+            if not is_owner(uid):
+                return
             n = 0
             for x in list(attack_status.keys()):
                 if attack_status[x].get("running"):
@@ -1821,28 +1771,32 @@ def main_on_callback(c):
             return
 
         if c.data == "owner_broadcast":
-            if not is_owner(uid): return
+            if not is_owner(uid):
+                return
             main_bot.answer_callback_query(c.id)
             msg = main_bot.send_message(chat_id, "📢 أرسل نص الإعلان:")
             main_bot.register_next_step_handler(msg, step_broadcast)
             return
 
         if c.data == "owner_edit_points":
-            if not is_owner(uid): return
+            if not is_owner(uid):
+                return
             main_bot.answer_callback_query(c.id)
             msg = main_bot.send_message(chat_id, "🔧 @user points أو uid points")
             main_bot.register_next_step_handler(msg, step_edit_points)
             return
 
         if c.data == "owner_add_proxy":
-            if not is_owner(uid): return
+            if not is_owner(uid):
+                return
             main_bot.answer_callback_query(c.id)
             msg = main_bot.send_message(chat_id, "أرسل البروكسي:")
             main_bot.register_next_step_handler(msg, step_owner_add_proxy)
             return
 
         if c.data == "owner_list_proxies":
-            if not is_owner(uid): return
+            if not is_owner(uid):
+                return
             main_bot.answer_callback_query(c.id)
             rows = db_exec("SELECT proxy, success, fail FROM proxies "
                            "ORDER BY success DESC LIMIT 50", fetch="all")
@@ -1851,7 +1805,8 @@ def main_on_callback(c):
             return
 
         if c.data == "owner_test_proxies":
-            if not is_owner(uid): return
+            if not is_owner(uid):
+                return
             main_bot.answer_callback_query(c.id, "🧪 اختبار...", show_alert=True)
             proxies = all_proxies()
             alive = batch_test(proxies)
@@ -1859,7 +1814,8 @@ def main_on_callback(c):
             return
 
         if c.data == "owner_del_proxy":
-            if not is_owner(uid): return
+            if not is_owner(uid):
+                return
             main_bot.answer_callback_query(c.id)
             msg = main_bot.send_message(chat_id, "أرسل البروكسي للحذف:")
             main_bot.register_next_step_handler(msg, step_owner_del_proxy)
@@ -1873,11 +1829,11 @@ def main_on_callback(c):
                 InlineKeyboardButton("🥇 متصدرون الذهب", callback_data="gc_top_gold"),
                 InlineKeyboardButton("💎 متصدرون الألماس", callback_data="gc_top_diamond"),
                 InlineKeyboardButton("📋 آخر المهام", callback_data="gc_tasks"),
+                InlineKeyboardButton("🛒 آخر المشتريات", callback_data="gc_purchases"),
                 InlineKeyboardButton("🏅 المتصدرون بالإحالة", callback_data="gc_top_refs"))
             if is_owner(uid):
-                kb.add(InlineKeyboardButton("🛒 آخر المشتريات", callback_data="gc_purchases"),
-                       InlineKeyboardButton("🎯 مسح الإحالات", callback_data="gc_harvest"))
-            kb.add(InlineKeyboardButton("🛍️ القناة", url=SHOWCASE_URL),
+                kb.add(InlineKeyboardButton("🎯 مسح الإحالات", callback_data="gc_harvest"))
+            kb.add(InlineKeyboardButton("🛒 آخر المشتريات (القناة)", url=SHOWCASE_URL),
                    InlineKeyboardButton("🔙 رجوع", callback_data="start"))
             gc_send(chat_id, "🎯 <b>لوحة GiftCode</b>\nاختر من القائمة:", kb)
             return
@@ -1907,13 +1863,10 @@ def main_on_callback(c):
             return
 
         if c.data == "gc_purchases":
-            if not is_owner(uid):
-                main_bot.answer_callback_query(c.id, "للمالك فقط", show_alert=True)
-                return
             main_bot.answer_callback_query(c.id, "⏳ جلب...")
             try:
                 gc_send(chat_id, render_purchases(get_gc().fetch_leaders(),
-                                                  is_owner=True, top=20))
+                                                  is_owner=is_owner(uid), top=20))
             except Exception as e:
                 gc_send(chat_id, f"❌ فشل الجلب: {_esc(e)}")
             return
@@ -1954,7 +1907,8 @@ def main_on_callback(c):
                             f"❌ غير صالح: {res['invalid']}\n"
                             f"⏭️ متجاوز: {res['skipped_seen']}\n"
                             f"💰 Gold: {res['gold']}")
-                        audit(uid, "gc_harvest", f"ok={res['ok']},gold={res['gold']}")
+                        audit(uid, "gc_harvest",
+                              f"ok={res['ok']},gold={res['gold']}")
                     except Exception as e:
                         try:
                             main_bot.send_message(chat_id, f"❌ خطأ: {_esc(e)}")
@@ -1982,7 +1936,8 @@ def main_on_callback(c):
 # ═══════════════════════ Features ═══════════════════════
 def do_daily(uid, chat_id):
     u = get_user(uid)
-    if not u: return
+    if not u:
+        return
     last = u["last_daily"]
     streak = u["streak"]
     now = datetime.now()
@@ -2058,14 +2013,16 @@ def do_owner_stats(chat_id):
 
 # ═══════════════════════ Steps ═══════════════════════
 def step_set_referral(m):
-    if _cancel.pop(m.from_user.id, None): return
+    if _cancel.pop(m.from_user.id, None):
+        return
     set_user(m.from_user.id, referral_code=m.text.strip())
     main_bot.reply_to(m, f"✅ {m.text.strip()}")
     main_menu(m.from_user.id, m.chat.id)
 
 
 def step_set_start(m):
-    if _cancel.pop(m.from_user.id, None): return
+    if _cancel.pop(m.from_user.id, None):
+        return
     if m.text.strip().isdigit():
         set_user(m.from_user.id, start_number=int(m.text.strip()))
         main_bot.reply_to(m, f"✅ {m.text.strip()}")
@@ -2075,7 +2032,8 @@ def step_set_start(m):
 
 
 def step_add_proxy(m):
-    if _cancel.pop(m.from_user.id, None): return
+    if _cancel.pop(m.from_user.id, None):
+        return
     if add_proxy(m.text.strip(), m.from_user.id):
         main_bot.reply_to(m, "✅ تمت")
         try:
@@ -2117,7 +2075,8 @@ def step_edit_points(m):
 
 def step_broadcast(m):
     text = m.text.strip()
-    if not text: return
+    if not text:
+        return
     users = db_exec("SELECT user_id FROM users WHERE banned=0", fetch="all")
     sent = failed = 0
     for row in users:
@@ -2130,7 +2089,7 @@ def step_broadcast(m):
     main_bot.reply_to(m, f"✅ {sent} | ❌ {failed}")
 
 
-# ═══════════════════════ SHOWCASE handlers ═══════════════════════
+# ═══════════════════════ SHOWCASE BOT — handlers ═══════════════════════
 @showcase_bot.message_handler(commands=["start"])
 def showcase_cmd_start(m):
     if is_owner(m.from_user.id):
@@ -2162,7 +2121,8 @@ def showcase_cmd_start(m):
 
 @showcase_bot.message_handler(commands=["set_channel"])
 def showcase_cmd_set_channel(m):
-    if not is_owner(m.from_user.id): return
+    if not is_owner(m.from_user.id):
+        return
     parts = m.text.split(maxsplit=1)
     if len(parts) < 2:
         showcase_bot.reply_to(m, "الاستخدام: /set_channel -1001234567890")
@@ -2182,35 +2142,41 @@ def showcase_cmd_set_channel(m):
 
 @showcase_bot.message_handler(commands=["feed_on"])
 def showcase_cmd_feed_on(m):
-    if not is_owner(m.from_user.id): return
+    if not is_owner(m.from_user.id):
+        return
     showcase_feed_enabled["on"] = True
     showcase_bot.reply_to(m, "✅ التغذية تعمل")
 
 
 @showcase_bot.message_handler(commands=["feed_off"])
 def showcase_cmd_feed_off(m):
-    if not is_owner(m.from_user.id): return
+    if not is_owner(m.from_user.id):
+        return
     showcase_feed_enabled["on"] = False
     showcase_bot.reply_to(m, "⏹️ التغذية متوقفة")
 
 
 @showcase_bot.message_handler(commands=["feed_now"])
 def showcase_cmd_feed_now(m):
-    if not is_owner(m.from_user.id): return
+    if not is_owner(m.from_user.id):
+        return
     showcase_bot.reply_to(m, "⏳ جاري الفحص والنشر...")
-    threading.Thread(target=lambda: showcase_feed_now(m.chat.id), daemon=True).start()
+    threading.Thread(target=lambda: showcase_feed_now(m.chat.id),
+                     daemon=True).start()
 
 
 @showcase_bot.message_handler(commands=["stats"])
 def showcase_cmd_stats(m):
-    if not is_owner(m.from_user.id): return
+    if not is_owner(m.from_user.id):
+        return
     total = db_exec("SELECT COUNT(*) c FROM showcase_seen", fetch="one")["c"]
     showcase_bot.reply_to(m, f"📊 مشتريات مُنشَرة: {total}")
 
 
 @showcase_bot.message_handler(commands=["clear_seen"])
 def showcase_cmd_clear_seen(m):
-    if not is_owner(m.from_user.id): return
+    if not is_owner(m.from_user.id):
+        return
     db_exec("DELETE FROM showcase_seen")
     showcase_bot.reply_to(m, "🗑️ تم مسح السجل.")
 
@@ -2284,11 +2250,10 @@ def flask_health():
 # ═══════════════════════ MAIN ═══════════════════════
 if __name__ == "__main__":
     _init_db()
-    gh_pull_user_data()           # من GitHub (إن مُفعّل)
     migrate_legacy()
     u, p = reimport_sessions(verbose=True)
-    log.info(f"Dual bot starting | GC: {'OK' if GC_TOKEN else 'MISSING'} | "
-             f"GH: {'OK' if GITHUB_TOKEN else 'off'} | +{u}u +{p}p")
+    log.info(f"Starting dual bot | GC token: {'OK' if GC_TOKEN else 'MISSING'} "
+             f"| reimport +{u}u +{p}p")
 
     for label, b in (("main", main_bot), ("showcase", showcase_bot)):
         try:
@@ -2301,7 +2266,6 @@ if __name__ == "__main__":
     threading.Thread(target=auto_harvest_loop, daemon=True).start()
     threading.Thread(target=showcase_feed_loop, daemon=True).start()
     threading.Thread(target=store_loop, daemon=True).start()
-    threading.Thread(target=gh_sync_loop, daemon=True).start()
     threading.Thread(target=poll_main, daemon=True).start()
     threading.Thread(target=poll_showcase, daemon=True).start()
 
